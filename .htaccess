@@ -1,0 +1,20 @@
+Options All -Indexes
+
+RewriteEngine On
+RewriteRule ^([a-zA-Z0-9/]+)$ index.php?views=$1
+
+# /P29Y53T9N5W/assets/.htaccess
+Order Allow,Deny
+Allow from all
+
+# Bloquear solo acceso directo sin referer
+RewriteEngine On
+RewriteCond %{HTTP_REFERER} ^$
+RewriteRule \.(css|js|png|jpg|jpeg)$ - [F]
+
+
+<RequireAll>
+    Require all granted
+    Require not ip 196.251.69.2
+    Require not ip 81.29.134.51
+</RequireAll>
