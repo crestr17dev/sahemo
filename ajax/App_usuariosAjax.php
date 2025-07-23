@@ -83,78 +83,13 @@ if ((isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true) || $
 		}
 		
 		
-		
-		//===========================================================================================================
-		//FUNCIONES PARA GESTIÓN DE ROLES
-		//===========================================================================================================
-
-		// CREAR NUEVO ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'crear_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->crear_rol_controlador();
-		}
-
-		// OBTENER NIVELES DISPONIBLES PARA CREAR ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'obtener_niveles_disponibles'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->obtener_niveles_disponibles_controlador();
-		}
-
-		// LISTAR ROLES
-		if(isset($_POST['accion']) && $_POST['accion'] == 'listar_roles'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->listar_roles_controlador();
-		}
-
-		// OBTENER ROL ESPECÍFICO
-		if(isset($_POST['accion']) && $_POST['accion'] == 'obtener_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->obtener_rol_controlador();
-		}
-
-		// ACTUALIZAR ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'actualizar_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->actualizar_rol_controlador();
-		}
-
-		// ELIMINAR ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'eliminar_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->eliminar_rol_controlador();
-		}
-
-		// CAMBIAR ESTADO DE ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'cambiar_estado_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->cambiar_estado_rol_controlador();
-		}
-
-		//===========================================================================================================
-		//FUNCIONES PARA GESTIÓN DE PERMISOS DE ROLES
-		//===========================================================================================================
-
-		// OBTENER PERMISOS DE UN ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'obtener_permisos_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->obtener_permisos_rol_controlador();
-		}
-
-		// ASIGNAR PERMISOS A ROL
-		if(isset($_POST['accion']) && $_POST['accion'] == 'asignar_permisos_rol'){
-			header('Content-Type: application/json; charset=UTF-8');
-			echo $usuariosController->asignar_permisos_rol_controlador();
-		}
-		
-		
 		//regenero token para la función que se esté trabajando
 		if(isset($_POST['accion']) && $_POST['accion'] == 'csrf_regenerar'){ 
 			$key = $_POST['key'] ?? '';
 
 			// Validar key permitidas (lista blanca)
 			$keys_permitidas = [
-				'formNuevoUsuario', 'editarUsuario', 'listUsuarios', 'cambioEstadoUsuario','cambioPasswordObligatorio', 'loginForm',
-    			'formNuevoRol', 'editarRol', 'listRoles', 'cambioEstadoRol', 'gestionPermisosRol'
+				'formNuevoUsuario', 'editarUsuario', 'listUsuarios', 'cambioEstadoUsuario','cambioPasswordObligatorio', 'loginForm'
 			];
 
 			if (!in_array($key, $keys_permitidas)) {
