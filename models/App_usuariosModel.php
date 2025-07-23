@@ -138,12 +138,23 @@ class usuariosModel extends SecureModel {
     /************ FUNCIÓN: obtener_usuario_para_login ********************************************/
 	 protected function obtener_usuario_para_login($identificador){
         try {
-            $sql = "SELECT u.*, e.EmpresaNombre, s.SucursalNombre, se.SedeNombre
+            /*$sql = "SELECT u.*, e.EmpresaNombre, s.SucursalNombre, se.SedeNombre
                     FROM App_usuarios_usuario u
                     LEFT JOIN App_empresa_empresa e ON u.UsuarioEmpresaId = e.EmpresaId
                     LEFT JOIN App_empresa_sucursal s ON u.UsuarioSucursalId = s.SucursalId  
                     LEFT JOIN App_empresa_sede se ON u.UsuarioSedeId = se.SedeId
-                    WHERE (u.UsuarioCodigo = ? OR u.UsuarioEmail = ? OR u.UsuarioDocumento = ?)";
+                    WHERE (u.UsuarioCodigo = ? OR u.UsuarioEmail = ? OR u.UsuarioDocumento = ?)";*/
+			
+			
+			$sql = "SELECT u.*, e.EmpresaNombre, s.SucursalNombre, se.SedeNombre, rol.UsuarioRolIdRol, r.RolNivel, r.RolNombre
+					FROM App_usuarios_usuario u
+					LEFT JOIN App_empresa_empresa e ON u.UsuarioEmpresaId = e.EmpresaId
+					LEFT JOIN App_empresa_sucursal s ON u.UsuarioSucursalId = s.SucursalId  
+					LEFT JOIN App_empresa_sede se ON u.UsuarioSedeId = se.SedeId
+					LEFT JOIN App_usuarios_usuario_rol rol ON u.UsuarioId = rol.UsuarioRolIdUsuario
+					LEFT JOIN App_usuarios_rol r ON rol.UsuarioRolIdRol = r.RolId
+					WHERE (u.UsuarioCodigo = ? OR u.UsuarioEmail = ? OR u.UsuarioDocumento = ?)";
+			
             
             $stmt = $this->ejecutar_consulta_segura($sql, [$identificador, $identificador, $identificador]);
             $resultado = $stmt->fetch();
@@ -263,118 +274,145 @@ class usuariosModel extends SecureModel {
 	//===========================================================================================================
     // LISTAR USUARIOS CON PAGINACIÓN Y FILTROS
     // Función para obtener usuarios con filtros aplicados y paginación
-    //===========================================================================================================
-	protected function listar_usuarios_modelo($datos_busqueda, $pagina = 1, $registros_por_pagina = 10) {
-		try {
-			// Offset para la paginación
-			$offset = ($pagina - 1) * $registros_por_pagina;
-
-			// Definir campos donde buscar
-			$campos_busqueda = [
-				'u.UsuarioNombres',
-				'u.UsuarioApellidos', 
-				'u.UsuarioCodigo',
-				'u.UsuarioEmail',
-				'u.UsuarioDocumento',
-				'u.UsuarioCargo',
-				'u.UsuarioDepartamento'
-			];
-
-			// Generar búsqueda inteligente
-			$parametros_busqueda = [];
-			$where_busqueda = $this->generar_busqueda_inteligente(
-				$datos_busqueda['shareusuario'] ?? '', 
-				$campos_busqueda, 
-				$parametros_busqueda
-			);
-
-			$estado_filtro = !empty($datos_busqueda['estadousuario']) ? '%' . ucfirst($datos_busqueda['estadousuario']) . '%' : '%';
-
-			// 1. Consulta para contar total
-			$sql_count = "SELECT COUNT(*) as total 
-						  FROM App_usuarios_usuario u 
-						  WHERE $where_busqueda
-						  AND u.UsuarioEstado LIKE ?";
-
-			$parametos_consulta_count = array_merge($parametros_busqueda, [$estado_filtro]);
-
-			$stmt_count = $this->ejecutar_consulta_segura($sql_count, $parametos_consulta_count);
-			$total_registros = $stmt_count->fetch()['total'];
-
-			// 2. Consulta para obtener datos con JOINs a empresa y sucursal
-			$sql_datos = "SELECT 
-							u.UsuarioId,
-							u.UsuarioCodigo,
-							u.UsuarioDocumento,
-							u.UsuarioTipoDocumento,
-							u.UsuarioNombres,
-							u.UsuarioApellidos,
-							u.UsuarioEmail,
-							u.UsuarioTelefono,
-							u.UsuarioCargo,
-							u.UsuarioDepartamento,
-							u.UsuarioFechaRegistro,
-							u.UsuarioUltimoAcceso,
-							u.UsuarioEstado,
-							u.UsuarioEmpresaId,
-							u.UsuarioSucursalId,
-							u.UsuarioSedeId,
-							e.EmpresaNombre,
-							e.EmpresaCodigo,
-							s.SucursalNombre,
-							s.SucursalCodigo,
-							se.SedeNombre,
-							se.SedeCodigo
-						  FROM App_usuarios_usuario u 
-							LEFT JOIN App_empresa_empresa e ON u.UsuarioEmpresaId = e.EmpresaId 
-							LEFT JOIN App_empresa_sucursal s ON u.UsuarioSucursalId = s.SucursalId
-							LEFT JOIN App_empresa_sede se ON u.UsuarioSedeId = se.SedeId
-						  WHERE $where_busqueda
-						  AND u.UsuarioEstado LIKE ?
-						  ORDER BY u.UsuarioFechaRegistro DESC 
-						  LIMIT ? OFFSET ?";
-
-			$parametos_consulta_datos = array_merge($parametros_busqueda, [$estado_filtro, $registros_por_pagina, $offset]);
-
-			$stmt_datos = $this->ejecutar_consulta_segura($sql_datos, $parametos_consulta_datos);
-			$usuarios = $stmt_datos->fetchAll();
-
-			// Calcular paginación
-			$total_paginas = ceil($total_registros / $registros_por_pagina);
-
-			return [
-				'usuarios' => $usuarios,
-				'paginacion' => [
-					'pagina_actual' => $pagina,
-					'total_paginas' => $total_paginas,
-					'total_registros' => $total_registros,
-					'registros_por_pagina' => $registros_por_pagina,
-					'desde' => $offset + 1,
-					'hasta' => min($offset + $registros_por_pagina, $total_registros)
-				]
-			];
-
-		} catch(Exception $e) {
-			error_log("Error en listar_usuarios_modelo: " . $e->getMessage());
-			return [
-				'usuarios' => [],
-				'paginacion' => [
-					'pagina_actual' => 1,
-					'total_paginas' => 0,
-					'total_registros' => 0,
-					'registros_por_pagina' => $registros_por_pagina,
-					'desde' => 0,
-					'hasta' => 0
-				]
-			];
-		}
-	}
+    //===========================================================================================================    
+	
+	protected function listar_usuarios_modelo($datos_busqueda, $pagina = 1, $registros_por_pagina = 10, $filtro_empresa = null) {
     
+    $usuario_id = $_SESSION['UsuarioId'];
+    $RolNivel = $this->determinar_rol_usuario();
+    
+    try {
+        // Offset para la paginación
+        $offset = ($pagina - 1) * $registros_por_pagina;
+
+        // Definir campos donde buscar
+        $campos_busqueda = [
+            'u.UsuarioNombres',
+            'u.UsuarioApellidos', 
+            'u.UsuarioCodigo',
+            'u.UsuarioEmail',
+            'u.UsuarioDocumento',
+            'u.UsuarioCargo',
+            'u.UsuarioDepartamento'
+        ];
+
+        // Generar búsqueda inteligente
+        $parametros_busqueda = [];
+        $where_busqueda = $this->generar_busqueda_inteligente(
+            $datos_busqueda['shareusuario'] ?? '', 
+            $campos_busqueda, 
+            $parametros_busqueda
+        );
+
+        $estado_filtro = !empty($datos_busqueda['estadousuario']) ? '%' . ucfirst($datos_busqueda['estadousuario']) . '%' : '%';
+
+        // Construir filtro de empresa
+        $where_empresa = "";
+        $parametros_empresa = [];
+        
+        if ($filtro_empresa !== null) {
+            $where_empresa = " AND u.UsuarioEmpresaId = ?";
+            $parametros_empresa[] = $filtro_empresa;
+        }
+
+        // 1. Consulta para contar total CON FILTRO DE ROLES
+        $sql_count = "SELECT COUNT(DISTINCT u.UsuarioId) as total 
+                      FROM App_usuarios_usuario u 
+                      LEFT JOIN App_usuarios_usuario_rol ur ON u.UsuarioId = ur.UsuarioRolIdUsuario
+                      LEFT JOIN App_usuarios_rol rol ON ur.UsuarioRolIdRol = rol.RolId
+                      WHERE $where_busqueda
+                      AND u.UsuarioEstado LIKE ?
+                      AND (u.UsuarioId = ? OR rol.RolNivel > ?)
+                      $where_empresa";
+
+        $parametros_consulta_count = array_merge($parametros_busqueda, [$estado_filtro, $usuario_id, $RolNivel], $parametros_empresa);
+
+        $stmt_count = $this->ejecutar_consulta_segura($sql_count, $parametros_consulta_count);
+        $total_registros = $stmt_count->fetch()['total'];
+
+        // 2. Consulta para obtener datos CON FILTRO DE ROLES
+        $sql_datos = "SELECT DISTINCT
+                        u.UsuarioId,
+                        u.UsuarioCodigo,
+                        u.UsuarioDocumento,
+                        u.UsuarioTipoDocumento,
+                        u.UsuarioNombres,
+                        u.UsuarioApellidos,
+                        u.UsuarioEmail,
+                        u.UsuarioTelefono,
+                        u.UsuarioCargo,
+                        u.UsuarioDepartamento,
+                        u.UsuarioFechaRegistro,
+                        u.UsuarioUltimoAcceso,
+                        u.UsuarioEstado,
+                        u.UsuarioEmpresaId,
+                        u.UsuarioSucursalId,
+                        u.UsuarioSedeId,
+                        u.UsuarioIsSuperAdmin,
+                        u.UsuarioIsSystemAdmin,
+                        e.EmpresaNombre,
+                        e.EmpresaCodigo,
+                        s.SucursalNombre,
+                        s.SucursalCodigo,
+                        se.SedeNombre,
+                        se.SedeCodigo
+                      FROM App_usuarios_usuario u 
+                        LEFT JOIN App_empresa_empresa e ON u.UsuarioEmpresaId = e.EmpresaId 
+                        LEFT JOIN App_empresa_sucursal s ON u.UsuarioSucursalId = s.SucursalId
+                        LEFT JOIN App_empresa_sede se ON u.UsuarioSedeId = se.SedeId
+                        LEFT JOIN App_usuarios_usuario_rol ur ON u.UsuarioId = ur.UsuarioRolIdUsuario
+                        LEFT JOIN App_usuarios_rol rol ON ur.UsuarioRolIdRol = rol.RolId
+                      WHERE $where_busqueda
+                      AND u.UsuarioEstado LIKE ?
+                      AND (u.UsuarioId = ? OR rol.RolNivel > ?)
+                      $where_empresa
+                      ORDER BY u.UsuarioFechaRegistro DESC 
+                      LIMIT ? OFFSET ?";
+
+        $parametros_consulta_datos = array_merge($parametros_busqueda, [$estado_filtro, $usuario_id, $RolNivel], $parametros_empresa, [$registros_por_pagina, $offset]);
+
+        $stmt_datos = $this->ejecutar_consulta_segura($sql_datos, $parametros_consulta_datos);
+        $usuarios = $stmt_datos->fetchAll();
+
+        // Calcular paginación
+        $total_paginas = ceil($total_registros / $registros_por_pagina);
+
+        return [
+            'usuarios' => $usuarios,
+            'paginacion' => [
+                'pagina_actual' => $pagina,
+                'total_paginas' => $total_paginas,
+                'total_registros' => $total_registros,
+                'registros_por_pagina' => $registros_por_pagina,
+                'desde' => $offset + 1,
+                'hasta' => min($offset + $registros_por_pagina, $total_registros)
+            ]
+        ];
+
+    } catch(Exception $e) {
+        error_log("Error en listar_usuarios_modelo: " . $e->getMessage());
+        return [
+            'usuarios' => [],
+            'paginacion' => [
+                'pagina_actual' => 1,
+                'total_paginas' => 0,
+                'total_registros' => 0,
+                'registros_por_pagina' => $registros_por_pagina,
+                'desde' => 0,
+                'hasta' => 0
+            ]
+        ];
+    }
+}
+	
+	
+	
+	
     //===========================================================================================================
     // OBTENER ESTADÍSTICAS DE USUARIOS
     // Función para obtener contadores para las tarjetas de estadísticas
     //===========================================================================================================
-	protected function obtener_estadisticas_usuarios_modelo() {
+	/*protected function obtener_estadisticas_usuarios_modelo() {
         try {
             
 			$parametros_activo = ['Activo'];
@@ -419,8 +457,62 @@ class usuariosModel extends SecureModel {
                 'usuarios_bloqueados' => 0
             ];
         }
-    }
+    }*/
 	
+	protected function obtener_estadisticas_usuarios_modelo($filtro_empresa = null) {
+    try {
+        
+        // NUEVO: Construir filtro de empresa
+        $where_empresa = "";
+        $parametros_empresa = [];
+        
+        if ($filtro_empresa !== null) {
+            $where_empresa = " AND UsuarioEmpresaId = ?";
+            $parametros_empresa[] = $filtro_empresa;
+        }
+        
+        $parametros_activo = array_merge(['Activo'], $parametros_empresa);
+        $parametros_inactivo = array_merge(['Inactivo'], $parametros_empresa);
+        $parametros_bloqueado = array_merge(['Bloqueado'], $parametros_empresa);
+                    
+        // Total de usuarios CON FILTRO
+        $sql_total_usuarios = "SELECT COUNT(*) as total_usuarios FROM App_usuarios_usuario WHERE 1=1 $where_empresa";
+        $stmt = $this->ejecutar_consulta_segura($sql_total_usuarios, $parametros_empresa);
+        $total_usuarios = $stmt->fetch();
+        
+        // Usuarios activos CON FILTRO
+        $sql_usuarios_activos = "SELECT COUNT(*) as usuarios_activos FROM App_usuarios_usuario WHERE UsuarioEstado = ? $where_empresa";
+        $stmt = $this->ejecutar_consulta_segura($sql_usuarios_activos, $parametros_activo);
+        $usuarios_activos = $stmt->fetch();
+        
+        // Usuarios inactivos CON FILTRO
+        $sql_usuarios_inactivos = "SELECT COUNT(*) as usuarios_inactivos FROM App_usuarios_usuario WHERE UsuarioEstado = ? $where_empresa";
+        $stmt = $this->ejecutar_consulta_segura($sql_usuarios_inactivos, $parametros_inactivo);
+        $usuarios_inactivos = $stmt->fetch();
+        
+        // Usuarios bloqueados CON FILTRO
+        $sql_usuarios_bloqueados = "SELECT COUNT(*) as usuarios_bloqueados FROM App_usuarios_usuario WHERE UsuarioEstado = ? $where_empresa";
+        $stmt = $this->ejecutar_consulta_segura($sql_usuarios_bloqueados, $parametros_bloqueado);
+        $usuarios_bloqueados = $stmt->fetch();
+        
+                    
+        return [
+            'total_usuarios' => $total_usuarios['total_usuarios'],
+            'usuarios_activos' => $usuarios_activos['usuarios_activos'],
+            'usuarios_inactivos' => $usuarios_inactivos['usuarios_inactivos'],
+            'usuarios_bloqueados' => $usuarios_bloqueados['usuarios_bloqueados']
+        ];
+        
+    } catch(Exception $e) {
+        error_log("Error en obtener_estadisticas_usuarios_modelo: " . $e->getMessage());
+        return [
+            'total_usuarios' => 0,
+            'usuarios_activos' => 0,
+            'usuarios_inactivos' => 0,
+            'usuarios_bloqueados' => 0
+        ];
+    }
+}
 	//===========================================================================================================
     // FUNCION PARA ELIMINAR EMPRESA
     // Cambia el estado a 'Eliminado' en lugar de borrar físicamente

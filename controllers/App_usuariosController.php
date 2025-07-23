@@ -1230,30 +1230,26 @@ class usuariosController extends usuariosModel {
         }
 
 	/************ VALIDACION 4: verificar permisos del usuario *************************************************/
-        if(!$this->verificar_permisos('listar_usuarios')){
-			/*-*-*-*-*-* registro logs de seguimiento y auditoria *-*-*-*-*-*/
-			$this->guardar_log(
-				'Usuario sin permisos para enlistar usuarios', [
-					'datos_antes' => [
-						'usuario'=>'sin permisos'
-					],
-					'datos_despues' => [
-						'CodigoUsuario' => $_SESSION['CodigoUsuario'],
-						'UsuarioId' => $_SESSION['UsuarioId']
-					],
+		if(!$this->verificar_permisos('listar_usuarios', null, false)){ // false = no verificar empresa para listar
+			$this->guardar_log('Usuario sin permisos para enlistar usuarios', [
+				'datos_antes' => ['usuario'=>'sin permisos'],
+				'datos_despues' => [
+					'CodigoUsuario' => $_SESSION['CodigoUsuario'],
+					'UsuarioId' => $_SESSION['UsuarioId']
 				],
-				'alto', 'bloqueado', 'App_usuarios');
+			], 'alto', 'bloqueado', 'App_usuarios');
+
 			/*-*-*-*-*-* Normalizamos el tiempo de respuesta *-*-*-*-*-*/           
             $this->normalizar_tiempo_respuesta();
 			/*-*-*-*-*-* Termino función para listar usuarios *-*-*-*-*-*/
-            
-			return  json_encode([
+			return json_encode([
 				"Alerta" => "simple",
-                "Titulo" => "Sin permisos",
-                "Texto" => "No tienes permisos para listar usuarios", 
+				"Titulo" => "Sin permisos",
+				"Texto" => "No tienes permisos para listar usuarios", 
 				"Tipo" => "warning"
 			], JSON_UNESCAPED_UNICODE);
-        }
+		}
+		
 		
 	/************ VALIDACION 5: limpiar los datos recibidos ****************************************************/ 
         $resultados_limpieza = [
@@ -1323,12 +1319,15 @@ class usuariosController extends usuariosModel {
         $registros_por_pagina = 5; // Puedes hacer esto configurable
         
         try {
+			
+			// NUEVO: Determinar filtro de empresa según tipo de usuario
+        	$filtro_empresa = $this->determinar_filtro_empresa();
+			
             // Llamar al modelo para obtener los usuarios
-            $resultado = $this->listar_usuarios_modelo($datos_usuario, $pagina, $registros_por_pagina);
-            
-            // Obtener estadísticas
-            $estadisticas = $this->obtener_estadisticas_usuarios_modelo();
-            			
+            $resultado = $this->listar_usuarios_modelo($datos_usuario, $pagina, $registros_por_pagina, $filtro_empresa);
+           
+			// Obtener estadísticas con filtro
+			$estadisticas = $this->obtener_estadisticas_usuarios_modelo($filtro_empresa);
 			
 			$vista_tipo = $datos_usuario['vista_tipo'];
 

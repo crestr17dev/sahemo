@@ -1280,7 +1280,7 @@ class SecureModel {
     // Funcion para verificar en tiempo real si el usuario si puede realizar la accion que esta ejecutando
     //===========================================================================================================
 	
-    protected function verificar_permisos($accion, $recurso_id = null) {
+    /*protected function verificar_permisos($accion, $recurso_id = null) {
         if(!isset($_SESSION['CodigoUsuario'])) {
             return false;
         }
@@ -1301,8 +1301,265 @@ class SecureModel {
         $resultado = $stmt->fetch();
         
         return $resultado['tiene_permiso'] > 0;
-    }
-    	
+    }*/
+	
+	protected function verificar_permisos($accion, $recurso_id = null, $verificar_empresa = true) {
+		if(!isset($_SESSION['CodigoUsuario'])) {
+			return false;
+		}
+
+		$usuario_id = $_SESSION['UsuarioId'];
+		$codigo_usuario = $_SESSION['CodigoUsuario'];
+
+		// PASO 1: Verificar si es SYSTEM_ADMIN (proveedor - acceso total)
+		if($this->es_system_admin($usuario_id)) {
+			$this->guardar_log('acceso_system_admin', [
+				'datos_antes' => ['accion_solicitada' => $accion, 'recurso_id' => $recurso_id],
+				'datos_despues' => ['resultado' => 'acceso_total_concedido', 'tipo_usuario' => 'SYSTEM_ADMIN']
+			], 'bajo', 'exito', 'permisos');
+
+			return true; // SYSTEM_ADMIN tiene acceso a todo
+		}
+
+		// PASO 2: Verificar si es SUPER_ADMIN (administrador de empresa)
+		if($this->es_super_admin($usuario_id)) {
+			// Super admin puede hacer todo dentro de su empresa
+			if(!$verificar_empresa || $this->verificar_recurso_misma_empresa($recurso_id, $_SESSION['UsuarioEmpresaId'])) {
+				$this->guardar_log('acceso_super_admin', [
+					'datos_antes' => ['accion_solicitada' => $accion, 'recurso_id' => $recurso_id],
+					'datos_despues' => ['resultado' => 'acceso_empresa_concedido', 'tipo_usuario' => 'SUPER_ADMIN']
+				], 'bajo', 'exito', 'permisos');
+
+				return true;
+			}
+		}
+
+		// PASO 3: Verificación normal de permisos por roles
+		$tiene_permiso_rol = $this->verificar_permiso_por_roles($usuario_id, $accion);
+
+		if(!$tiene_permiso_rol) {
+			$this->guardar_log('permiso_denegado_rol', [
+				'datos_antes' => ['accion_solicitada' => $accion, 'usuario_id' => $usuario_id],
+				'datos_despues' => ['resultado' => 'sin_permiso_en_roles']
+			], 'medio', 'bloqueado', 'permisos');
+
+			return false;
+		}
+
+		// PASO 4: Verificar separación por empresa (si aplica)
+		if($verificar_empresa && $recurso_id && !$this->verificar_recurso_misma_empresa($recurso_id, $_SESSION['UsuarioEmpresaId'])) {
+			$this->guardar_log('permiso_denegado_empresa', [
+				'datos_antes' => ['accion_solicitada' => $accion, 'recurso_id' => $recurso_id],
+				'datos_despues' => ['resultado' => 'recurso_empresa_diferente', 'empresa_usuario' => $_SESSION['UsuarioEmpresaId']]
+			], 'alto', 'bloqueado', 'permisos');
+
+			return false;
+		}
+
+		// PASO 5: Log de acceso exitoso
+		$this->guardar_log('permiso_concedido', [
+			'datos_antes' => ['accion_solicitada' => $accion, 'usuario_id' => $usuario_id],
+			'datos_despues' => ['resultado' => 'acceso_concedido', 'metodo' => 'rol_y_empresa']
+		], 'bajo', 'exito', 'permisos');
+
+		return true;
+	}
+	
+	
+	//===========================================================================================================
+	// FUNCIONES AUXILIARES PARA VERIFICACIÓN DE PERMISOS
+	//===========================================================================================================
+
+	/**
+	 * Verificar si el usuario es SYSTEM_ADMIN (proveedor)
+	 */
+	protected function es_system_admin($usuario_id) {
+		try {
+			$sql = "SELECT UsuarioIsSystemAdmin FROM App_usuarios_usuario 
+					WHERE UsuarioId = ? AND UsuarioEstado = 'Activo'";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$usuario_id]);
+			$resultado = $stmt->fetch();
+
+			return $resultado && $resultado['UsuarioIsSystemAdmin'] == 1;
+
+		} catch(Exception $e) {
+			error_log("Error verificando system admin: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Verificar si el usuario es SUPER_ADMIN (administrador de empresa)
+	 */
+	protected function es_super_admin($usuario_id) {
+		try {
+			$sql = "SELECT UsuarioIsSuperAdmin FROM App_usuarios_usuario 
+					WHERE UsuarioId = ? AND UsuarioEstado = 'Activo'";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$usuario_id]);
+			$resultado = $stmt->fetch();
+
+			return $resultado && $resultado['UsuarioIsSuperAdmin'] == 1;
+
+		} catch(Exception $e) {
+			error_log("Error verificando super admin: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Verificar permisos a través del sistema de roles
+	 */
+	protected function verificar_permiso_por_roles($usuario_id, $accion) {
+		try {
+			$sql = "SELECT COUNT(*) as tiene_permiso 
+					FROM App_usuarios_usuario_rol ur
+					INNER JOIN App_usuarios_rol_permiso rp ON ur.UsuarioRolIdRol = rp.RolPermisoIdRol
+					INNER JOIN App_usuarios_permiso p ON rp.RolPermisoIdPermiso = p.PermisoId
+					WHERE ur.UsuarioRolIdUsuario = ? 
+					AND p.PermisoCodigo = ?
+					AND ur.UsuarioRolEstado = 'Activo'
+					AND rp.RolPermisoEstado = 'Activo'
+					AND p.PermisoEstado = 'Activo'";
+
+			$stmt = $this->ejecutar_consulta_segura($sql, [$usuario_id, $accion]);
+			$resultado = $stmt->fetch();
+
+			return $resultado['tiene_permiso'] > 0;
+
+		} catch(Exception $e) {
+			error_log("Error verificando permisos por roles: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Verificar que un recurso pertenece a la misma empresa del usuario
+	 */
+	protected function verificar_recurso_misma_empresa($recurso_id, $empresa_usuario) {
+		if(!$recurso_id || !$empresa_usuario) {
+			return true; // Si no hay restricción, permitir
+		}
+
+		try {
+			// Para usuarios, verificar que pertenezcan a la misma empresa
+			$sql = "SELECT UsuarioEmpresaId FROM App_usuarios_usuario WHERE UsuarioId = ?";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$recurso_id]);
+			$resultado = $stmt->fetch();
+
+			if($resultado) {
+				return $resultado['UsuarioEmpresaId'] == $empresa_usuario;
+			}
+
+			return false;
+
+		} catch(Exception $e) {
+			error_log("Error verificando empresa del recurso: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Verificar jerarquía de usuarios (para evitar que usuarios gestionen superiores)
+	 */
+	protected function verificar_jerarquia_usuarios($usuario_gestor_id, $usuario_objetivo_id) {
+		try {
+			// Obtener información de ambos usuarios
+			$sql = "SELECT UsuarioId, UsuarioIsSuperAdmin, UsuarioIsSystemAdmin, UsuarioEmpresaId 
+					FROM App_usuarios_usuario 
+					WHERE UsuarioId IN (?, ?) AND UsuarioEstado != 'Eliminado'";
+
+			$stmt = $this->ejecutar_consulta_segura($sql, [$usuario_gestor_id, $usuario_objetivo_id]);
+			$usuarios = $stmt->fetchAll();
+
+			if(count($usuarios) != 2) {
+				return false; // Uno de los usuarios no existe
+			}
+
+			$gestor = null;
+			$objetivo = null;
+
+			foreach($usuarios as $usuario) {
+				if($usuario['UsuarioId'] == $usuario_gestor_id) {
+					$gestor = $usuario;
+				} else {
+					$objetivo = $usuario;
+				}
+			}
+
+			// SYSTEM_ADMIN puede gestionar a todos
+			if($gestor['UsuarioIsSystemAdmin'] == 1) {
+				return true;
+			}
+
+			// SUPER_ADMIN puede gestionar usuarios de su empresa (excepto otros SYSTEM_ADMIN)
+			if($gestor['UsuarioIsSuperAdmin'] == 1) {
+				// No puede gestionar SYSTEM_ADMIN
+				if($objetivo['UsuarioIsSystemAdmin'] == 1) {
+					return false;
+				}
+
+				// Debe ser de la misma empresa
+				return $gestor['UsuarioEmpresaId'] == $objetivo['UsuarioEmpresaId'];
+			}
+
+			// Usuario normal no puede gestionar SUPER_ADMIN ni SYSTEM_ADMIN
+			if($objetivo['UsuarioIsSuperAdmin'] == 1 || $objetivo['UsuarioIsSystemAdmin'] == 1) {
+				return false;
+			}
+
+			// Debe ser de la misma empresa
+			return $gestor['UsuarioEmpresaId'] == $objetivo['UsuarioEmpresaId'];
+
+		} catch(Exception $e) {
+			error_log("Error verificando jerarquía: " . $e->getMessage());
+			return false;
+		}
+	}
+	
+	//======== funcion para verificar si el filtro se hace automatico por empresa a la que pertenece el usuario =============//
+	protected function determinar_filtro_empresa() {
+		$usuario_id = $_SESSION['UsuarioId'];
+
+		// SYSTEM_ADMIN ve todos los usuarios
+		if($this->es_system_admin($usuario_id)) {
+			return null; // Sin filtro
+		}
+
+		// Los demás usuarios solo ven de su empresa
+		return $_SESSION['UsuarioEmpresaId'] ?? null;
+	}
+	
+    //==================== funciones para verificar el rol del usuario actual =============================================//	
+	
+	protected function determinar_rol_usuario(){
+		try {
+			if (!isset($_SESSION['UsuarioId'])) {
+				return null;
+			}
+
+			$usuario_id = $_SESSION['UsuarioId'];
+
+			// Consulta más directa desde usuarios hacia roles
+			$sql = "SELECT MAX(rol.RolNivel) as RolNivel 
+					FROM App_usuarios_usuario u
+					INNER JOIN App_usuarios_usuario_rol ur ON u.UsuarioId = ur.UsuarioRolIdUsuario
+					INNER JOIN App_usuarios_rol rol ON ur.UsuarioRolIdRol = rol.RolId
+					WHERE u.UsuarioId = ?";
+
+			$stmt = $this->ejecutar_consulta_segura($sql, [$usuario_id]);
+			$resultado = $stmt->fetch();
+
+			$rol_nivel = $resultado['RolNivel'] ?? null;
+			$_SESSION['RolNivel'] = $rol_nivel;
+
+			return $rol_nivel;
+
+		} catch(Exception $e) {
+			error_log("Error determinando rol de usuario: " . $e->getMessage());
+			return null;
+		}
+	}
+	
 	//===========================================================================================================
     // PASO 11: GENERACION DE CODIGOS ALEATORIOS
     // funcion para generar codigo de identificacion secundadia en la base de datos para todo lo que se registre
