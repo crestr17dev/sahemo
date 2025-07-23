@@ -867,7 +867,7 @@ $usuariosController = new usuariosController();
                     <i class="bi bi-building me-1"></i>
                     Empresas
                 </a>
-                <a class="nav-link active" href="<?php echo SERVERURL?>usuario/">
+                <a class="nav-link active" href="<?php echo SERVERURL?>usuarios/">
                     <i class="bi bi-people me-1"></i>
                     Usuarios
                 </a>
@@ -894,7 +894,7 @@ $usuariosController = new usuariosController();
             <div class="sidebar-section">
                 <div class="sidebar-header">USUARIOS</div>
                 <nav class="nav flex-column">
-                    <a class="nav-link active" href="<?php echo SERVERURL?>usuario/">
+                    <a class="nav-link active" href="<?php echo SERVERURL?>usuarios/">
                         <i class="bi bi-people"></i>
                         Lista de Usuarios
                     </a>
@@ -908,13 +908,13 @@ $usuariosController = new usuariosController();
 
                 <div class="sidebar-header">ROLES Y PERMISOS</div>
                 <nav class="nav flex-column">
-                    <a class="nav-link" href="#" onclick="alert('Próximamente - Gestión de Roles')">
+                    <a class="nav-link" href="#" onclick="mostrarGestionRoles()">
                         <i class="bi bi-shield-check"></i>
                         Gestión de Roles
                     </a>
-                    <a class="nav-link" href="#" onclick="alert('Próximamente - Permisos')">
+                    <a class="nav-link" href="#" onclick="mostrarGestionPermisos()">
                         <i class="bi bi-key"></i>
-                        Permisos
+                        Gestión de Permisos
                     </a>
                 </nav>
 
@@ -1832,7 +1832,132 @@ $usuariosController = new usuariosController();
             </div>
         </div>
     </div>
-	
+	<!-- Modal Nuevo Rol -->
+    <div class="modal fade" id="modalNuevoRol" tabindex="-1" aria-labelledby="modalNuevoRolLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNuevoRolLabel">
+                        <i class="bi bi-shield-plus"></i>
+                        Crear Nuevo Rol
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <form id="formNuevoRol" novalidate>
+                        <input type="hidden" name="csrf_token_nuevo_rol" value="<?php echo $usuariosController->obtener_token_csrf('formNuevoRol'); ?>">
+                        
+                        <!-- Información Básica del Rol -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="bi bi-info-circle"></i>
+                                Información Básica
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="rolNombre" class="form-label required">Nombre del Rol</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">
+                                                <i class="bi bi-shield"></i>
+                                            </span>
+                                            <input type="text" class="form-control" id="rolNombre" name="rol-nombre" 
+                                                   placeholder="Ej: Gerente de Ventas" maxlength="100" required>
+                                        </div>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="rolNivel" class="form-label required">Nivel de Jerarquía</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">
+                                                <i class="bi bi-sort-numeric-up"></i>
+                                            </span>
+                                            <select class="form-select" id="rolNivel" name="rol-nivel" required>
+                                                <option value="">Seleccionar Nivel</option>
+                                                <!-- Se cargarán dinámicamente según el usuario actual -->
+                                            </select>
+                                        </div>
+                                        <div class="form-text">
+                                            <i class="bi bi-info-circle me-1"></i>
+                                            Menor número = Mayor jerarquía
+                                        </div>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-12">
+                                    <div class="mb-3">
+                                        <label for="rolDescripcion" class="form-label">Descripción</label>
+                                        <textarea class="form-control" id="rolDescripcion" name="rol-descripcion" 
+                                                  rows="3" maxlength="500" 
+                                                  placeholder="Describe las responsabilidades y alcance de este rol..."></textarea>
+                                        <div class="form-text">
+                                            <span id="contadorCaracteres">0</span>/500 caracteres
+                                        </div>
+                                        <div class="invalid-feedback"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Información de Jerarquía -->
+                        <div class="form-section">
+                            <div class="form-section-title">
+                                <i class="bi bi-diagram-3"></i>
+                                Información de Jerarquía
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <strong>Niveles de Jerarquía:</strong>
+                                <ul class="mb-0 mt-2">
+                                    <li><strong>Nivel 0:</strong> SYSTEM_ADMIN (Proveedor - Acceso Total)</li>
+                                    <li><strong>Nivel 1:</strong> SUPER_ADMIN (Admin Principal Empresa)</li>
+                                    <li><strong>Nivel 2-3:</strong> Administradores y Gerentes</li>
+                                    <li><strong>Nivel 4+:</strong> Usuarios Estándar</li>
+                                </ul>
+                            </div>
+                            
+                            <div class="card border-warning">
+                                <div class="card-body">
+                                    <h6 class="card-title text-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        Importante - Jerarquía
+                                    </h6>
+                                    <p class="card-text mb-0">
+                                        <small>
+                                            • Solo puedes crear roles de nivel inferior al tuyo<br>
+                                            • Los usuarios con este rol podrán gestionar roles de nivel inferior<br>
+                                            • El nivel determina qué usuarios puede gestionar cada rol
+                                        </small>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                        <i class="bi bi-x-circle me-1"></i>
+                        Cancelar
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="guardarNuevoRol()">
+                        <i class="bi bi-check-circle me-1"></i>
+                        Crear Rol
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
 
 	
     <script src="<?php echo SERVERURL?>views/App_usuarios/js/app_usuario.js"></script>

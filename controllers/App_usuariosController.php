@@ -2685,6 +2685,389 @@ class usuariosController extends usuariosModel {
 			], JSON_UNESCAPED_UNICODE);
 		}
 	}
+	
+
+	//===========================================================================================================
+	// FUNCIONES PARA GESTIÓN DE ROLES
+	//===========================================================================================================
+
+	//===========================================================================================================
+	// CREAR NUEVO ROL
+	// Función para crear un nuevo rol en el sistema
+	//===========================================================================================================
+	public function crear_rol_controlador(){
+		/*-------------------//-------- PASO 1 LIMPIEZA, VALIDACIONES Y SEGURIDAD --------//-----------------------*/	
+		/************ Marcar inicio del tiempo para normalizar respuestas *******************************************/
+		$this->tiempo_inicio = microtime(true);
+
+		/************ VALIDACION 1: Método POST *****************************************************************/
+		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+			$this->guardar_log('metodo_http_invalido_crear_rol', [
+				'datos_antes' => ['metodo_recibido' => $_SERVER['REQUEST_METHOD']],
+				'datos_despues' => ['accion' => 'rechazado']
+			], 'alto', 'bloqueado', 'App_rol');
+
+			return json_encode(["error" => "Method not allowed"]);
+		}
+
+		/************ VALIDACION 2: Detección de bots ***********************************************************/
+		$numero_campos = count($_POST);
+		$umbral_minimo = ($numero_campos - 1) * 2; // 2 segundos por campo
+		$analisis_bot = $this->es_bot_sospechoso($umbral_minimo, $numero_campos);
+
+		if ($analisis_bot['es_bot']) {
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Actividad Sospechosa",
+				"Texto" => "Actividad detectada como automatizada", 
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 3: Verificar token CSRF *******************************************************/
+		if(!isset($_POST['csrf_token_nuevo_rol']) || !$this->validar_csrf($_POST['csrf_token_nuevo_rol'],'formNuevoRol')){
+			$this->guardar_log('csrf_token_invalido_crear_rol', [
+				'datos_antes' => ['Token_creado'=>'Diferente al recibido'],
+				'datos_despues' => [
+					'formulario' => 'formNuevoRol',
+					'token_recibido_hash' => isset($_POST['csrf_token_nuevo_rol']) ? hash('sha256', $_POST['csrf_token_nuevo_rol']) : 'no_enviado',
+					'session_id' => session_id(),
+					'CodigoUsuario' => $_SESSION['CodigoUsuario'] ?? 'no_definido',
+					'UsuarioId' => $_SESSION['UsuarioId'] ?? 'no_definido'
+				]
+			], 'alto', 'bloqueado', 'App_rol');
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Token inválido",
+				"Texto" => "Token de seguridad inválido. Recarga la página e intenta nuevamente", 
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 4: Verificar permisos *********************************************************/
+		if(!$this->verificar_permisos('crear_roles')){
+			$this->guardar_log('sin_permisos_crear_rol', [
+				'datos_antes' => ['usuario'=>'sin permisos'],
+				'datos_despues' => [
+					'CodigoUsuario' => $_SESSION['CodigoUsuario'],
+					'UsuarioId' => $_SESSION['UsuarioId']
+				],
+			], 'alto', 'bloqueado', 'App_rol');
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Sin permisos",
+				"Texto" => "No tienes permisos para crear roles", 
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 5: Límite de intentos *********************************************************/
+		if(!$this->verificar_intentos('crear_rol', 3, 300)){
+			$this->guardar_log('crear_rol_intentos_excedidos', [
+				'datos_antes' => ['intentos'=>'Usuario alcanzó el máximo de intentos'],
+				'datos_despues' => [
+					'CodigoUsuario' => $_SESSION['CodigoUsuario'],
+					'UsuarioId' => $_SESSION['UsuarioId']
+				],
+			], 'alto', 'bloqueado', 'App_rol');
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Demasiados intentos",
+				"Texto" => "Has superado el límite de intentos. Espera 5 minutos",
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 6: Limpiar datos recibidos ****************************************************/
+		$resultados_limpieza = [
+			'RolNombre' => $this->limpiar_datos($_POST['rol-nombre'], 'texto', 'rol-nombre'),
+			'RolNivel' => $this->limpiar_datos($_POST['rol-nivel'], 'numero', 'rol-nivel'),
+			'RolDescripcion' => $this->limpiar_datos($_POST['rol-descripcion'] ?? '', 'texto', 'rol-descripcion')
+		];
+
+		/************ VALIDACION 7: Verificar ataques **********************************************************/
+		$hay_ataques = false;
+		$ataques_por_campo = [];
+
+		foreach ($resultados_limpieza as $campo => $resultado) {
+			if (!$resultado['es_seguro']) {
+				$hay_ataques = true;
+				$ataques_por_campo[$campo] = $resultado['ataques_detectados'];
+			}  
+		}
+
+		if ($hay_ataques) {
+			$nivel_riesgo_maximo = 'bajo';
+			foreach ($resultados_limpieza as $resultado) {
+				if ($resultado['nivel_riesgo'] === 'alto') {
+					$nivel_riesgo_maximo = 'alto';
+					break;
+				} elseif ($resultado['nivel_riesgo'] === 'medio' && $nivel_riesgo_maximo !== 'alto') {
+					$nivel_riesgo_maximo = 'medio';
+				}
+			}
+
+			$this->guardar_log('formulario_rol_rechazado_por_ataques', [
+				'datos_antes' => [
+					'campos_con_ataques' => array_keys($ataques_por_campo),
+					'total_campos_afectados' => count($ataques_por_campo),
+					'resumen_ataques' => $ataques_por_campo
+				],
+				'datos_despues' => [
+					'accion_tomada' => 'formulario_rechazado_completamente'
+				],
+			], $nivel_riesgo_maximo, 'rechazado', 'App_rol'); 
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Datos no válidos",
+				"Texto" => "Los datos enviados contienen información no permitida.",
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 8: Extraer datos limpios ******************************************************/
+		$datos_rol = [];
+		foreach ($resultados_limpieza as $campo => $resultado) {
+			$datos_rol[$campo] = $resultado['dato_limpio'];
+		}
+
+		/************ VALIDACION 9: Validar campos obligatorios ************************************************/
+		$errores_validacion = [];
+
+		// Validar nombre del rol
+		if (empty($datos_rol['RolNombre'])) {
+			$errores_validacion[] = "El nombre del rol es obligatorio";
+		} elseif (strlen($datos_rol['RolNombre']) < 3) {
+			$errores_validacion[] = "El nombre del rol debe tener al menos 3 caracteres";
+		} elseif (strlen($datos_rol['RolNombre']) > 100) {
+			$errores_validacion[] = "El nombre del rol no puede exceder 100 caracteres";
+		}
+
+		// Validar nivel
+		if (empty($datos_rol['RolNivel']) || !is_numeric($datos_rol['RolNivel'])) {
+			$errores_validacion[] = "El nivel del rol es obligatorio y debe ser numérico";
+		}
+
+		// Validar descripción
+		if (!empty($datos_rol['RolDescripcion']) && strlen($datos_rol['RolDescripcion']) > 500) {
+			$errores_validacion[] = "La descripción no puede exceder 500 caracteres";
+		}
+
+		if (!empty($errores_validacion)) {
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Datos incorrectos",
+				"Texto" => implode("\n", $errores_validacion),
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VALIDACION 10: Verificar jerarquía *******************************************************/
+		$nivel_solicitado = (int)$datos_rol['RolNivel'];
+		$nivel_usuario_actual = $this->determinar_rol_usuario();
+
+		// Solo SYSTEM_ADMIN puede crear cualquier nivel
+		if (!$this->es_system_admin($_SESSION['UsuarioId'])) {
+			if ($nivel_solicitado <= $nivel_usuario_actual) {
+				$this->normalizar_tiempo_respuesta();
+				return json_encode([
+					"Titulo" => "Nivel no permitido",
+					"Texto" => "Solo puedes crear roles de nivel inferior al tuyo (mayor número)",
+					"Tipo" => "warning"
+				], JSON_UNESCAPED_UNICODE);
+			}
+		}
+
+		/*-------------------//-------- PASO 2: VERIFICACIONES DE NEGOCIO --------//---------------------------*/
+
+		/************ VERIFICACION 1: Nombre de rol duplicado **************************************************/
+		if($this->verificar_nombre_rol_duplicado($datos_rol['RolNombre'])){
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Nombre duplicado",
+				"Texto" => "Ya existe un rol con este nombre", 
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/************ VERIFICACION 2: Nivel de rol duplicado ***************************************************/
+		if($this->verificar_nivel_rol_duplicado($nivel_solicitado)){
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Nivel duplicado",
+				"Texto" => "Ya existe un rol con este nivel de jerarquía", 
+				"Tipo" => "warning"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		/*-------------------//-------- PASO 3: CREAR ROL --------//---------------------------*/
+
+		/************ COMPLEMENTO 1: Generar código para el rol ************************************************/
+		$codigo_rol = $this->generar_codigo_rol($datos_rol['RolNombre']);
+
+		/************ COMPLEMENTO 2: Preparar datos finales ****************************************************/
+		$datos_finales = [
+			'RolCodigo' => $codigo_rol,
+			'RolNombre' => $datos_rol['RolNombre'],
+			'RolDescripcion' => $datos_rol['RolDescripcion'],
+			'RolNivel' => $nivel_solicitado,
+			'RolFechaCreacion' => date("Y-m-d H:i:s"),
+			'RolEstado' => 'Activo'
+		];
+
+		/************ GUARDAR ROL ***************************************************************************/
+		$resultado = $this->crear_rol_modelo($datos_finales);
+
+		if($resultado){
+			/*-*-*-*-*-* Log de creación exitosa *-*-*-*-*-*/
+			$this->guardar_log('rol_creado_exitosamente', [
+				'datos_antes' => ['antes'=>'sin información'],
+				'datos_despues' => [
+					'resultado'=> 'rol creado exitosamente',
+					'codigo_rol' => $codigo_rol,
+					'nombre_rol' => $datos_rol['RolNombre'],
+					'nivel_rol' => $nivel_solicitado,
+					'usuario_creador' => $_SESSION['UsuarioId']
+				],
+			], 'medio', 'exito', 'App_rol');
+
+			/*-*-*-*-*-* Eliminar token usado *-*-*-*-*-*/
+			$this->eliminar_token_csrf('formNuevoRol');
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Rol creado",
+				"Texto" => "El rol '{$datos_rol['RolNombre']}' se ha creado exitosamente",
+				"Tipo" => "success"
+			], JSON_UNESCAPED_UNICODE);
+
+		} else {
+			/*-*-*-*-*-* Log de error *-*-*-*-*-*/
+			$this->guardar_log('error_crear_rol', [
+				'datos_antes' => ['antes'=>'sin información'],
+				'datos_despues' => [
+					'resultado'=> 'rol no creado',
+					'codigo_rol' => $codigo_rol,
+					'nombre_rol' => $datos_rol['RolNombre']
+				],
+			], 'medio', 'error', 'App_rol');
+
+			$this->normalizar_tiempo_respuesta();
+			return json_encode([
+				"Titulo" => "Error",
+				"Texto" => "No se pudo crear el rol. Intenta nuevamente",
+				"Tipo" => "error"
+			], JSON_UNESCAPED_UNICODE);
+		}
+	}
+
+	//===========================================================================================================
+	// OBTENER NIVELES DISPONIBLES PARA CREAR ROL
+	// Función para obtener los niveles que el usuario actual puede asignar
+	//===========================================================================================================
+	public function obtener_niveles_disponibles_controlador(){
+		/************ VALIDACION 1: Método POST *****************************************************************/
+		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+			return json_encode(["error" => "Method not allowed"]);
+		}
+
+		/************ VALIDACION 2: Verificar permisos *********************************************************/
+		if(!$this->verificar_permisos('crear_roles')){
+			return json_encode([
+				"status" => "error",
+				"message" => "Sin permisos para obtener niveles"
+			], JSON_UNESCAPED_UNICODE);
+		}
+
+		try {
+			$usuario_id = $_SESSION['UsuarioId'];
+			$nivel_usuario_actual = $this->determinar_rol_usuario();
+			$es_system_admin = $this->es_system_admin($usuario_id);
+
+			$niveles_disponibles = [];
+
+			if ($es_system_admin) {
+				// SYSTEM_ADMIN puede crear cualquier nivel
+				$niveles_disponibles = [
+					['valor' => 1, 'descripcion' => 'SUPER_ADMIN (Admin Principal Empresa)'],
+					['valor' => 2, 'descripcion' => 'ADMIN (Administrador)'],
+					['valor' => 3, 'descripcion' => 'MANAGER (Gerente/Supervisor)'],
+					['valor' => 4, 'descripcion' => 'USER (Usuario Estándar)'],
+					['valor' => 5, 'descripcion' => 'READONLY (Solo Lectura)'],
+					['valor' => 6, 'descripcion' => 'CUSTOM (Personalizado)'],
+					['valor' => 7, 'descripcion' => 'CUSTOM (Personalizado)'],
+					['valor' => 8, 'descripcion' => 'CUSTOM (Personalizado)'],
+					['valor' => 9, 'descripcion' => 'CUSTOM (Personalizado)'],
+					['valor' => 10, 'descripcion' => 'CUSTOM (Personalizado)']
+				];
+			} else {
+				// Otros usuarios solo pueden crear niveles inferiores
+				for ($i = $nivel_usuario_actual + 1; $i <= 10; $i++) {
+					$descripcion = match($i) {
+						1 => 'SUPER_ADMIN (Admin Principal Empresa)',
+						2 => 'ADMIN (Administrador)',
+						3 => 'MANAGER (Gerente/Supervisor)',
+						4 => 'USER (Usuario Estándar)',
+						5 => 'READONLY (Solo Lectura)',
+						default => 'CUSTOM (Personalizado)'
+					};
+
+					$niveles_disponibles[] = [
+						'valor' => $i,
+						'descripcion' => $descripcion
+					];
+				}
+			}
+
+			return json_encode([
+				"status" => "success",
+				"niveles" => $niveles_disponibles
+			], JSON_UNESCAPED_UNICODE);
+
+		} catch (Exception $e) {
+			error_log("Error obteniendo niveles disponibles: " . $e->getMessage());
+			return json_encode([
+				"status" => "error",
+				"message" => "Error interno del servidor"
+			], JSON_UNESCAPED_UNICODE);
+		}
+	}
+
+	//===========================================================================================================
+	// FUNCIONES AUXILIARES PARA ROLES
+	//===========================================================================================================
+
+	/**
+	 * Generar código único para el rol
+	 */
+	private function generar_codigo_rol($nombre_rol) {
+		// Convertir nombre a código
+		$codigo_base = strtoupper(str_replace(' ', '_', $nombre_rol));
+
+		// Limpiar caracteres especiales
+		$codigo_base = preg_replace('/[^A-Z0-9_]/', '', $codigo_base);
+
+		// Limitar longitud
+		if (strlen($codigo_base) > 20) {
+			$codigo_base = substr($codigo_base, 0, 20);
+		}
+
+		// Verificar unicidad
+		$contador = 1;
+		$codigo_final = $codigo_base;
+
+		while ($this->verificar_codigo_rol_existe($codigo_final)) {
+			$codigo_final = $codigo_base . '_' . $contador;
+			$contador++;
+		}
+
+		return $codigo_final;
+	}
+
 }
 
 ?>

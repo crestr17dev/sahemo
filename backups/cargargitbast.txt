@@ -1,0 +1,17 @@
+git status
+
+git add .
+
+git commit -m "Actualización del proyecto"
+
+git push origin main
+
+git status
+
+¡ESO ES TODO!
+
+El primer git status te dice qué cambió
+git add . agrega todos los cambios importantes (ignora automáticamente los archivos _notes)
+git commit guarda los cambios con un mensaje
+git push sube todo al repositorio
+El último git status confirma que todo está limpio

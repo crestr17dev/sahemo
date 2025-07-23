@@ -274,7 +274,113 @@ class usuariosModel extends SecureModel {
 	//===========================================================================================================
     // LISTAR USUARIOS CON PAGINACIÓN Y FILTROS
     // Función para obtener usuarios con filtros aplicados y paginación
-    //===========================================================================================================    
+    //===========================================================================================================
+	/*protected function listar_usuarios_modelo($datos_busqueda, $pagina = 1, $registros_por_pagina = 10) {
+		try {
+			// Offset para la paginación
+			$offset = ($pagina - 1) * $registros_por_pagina;
+
+			// Definir campos donde buscar
+			$campos_busqueda = [
+				'u.UsuarioNombres',
+				'u.UsuarioApellidos', 
+				'u.UsuarioCodigo',
+				'u.UsuarioEmail',
+				'u.UsuarioDocumento',
+				'u.UsuarioCargo',
+				'u.UsuarioDepartamento'
+			];
+
+			// Generar búsqueda inteligente
+			$parametros_busqueda = [];
+			$where_busqueda = $this->generar_busqueda_inteligente(
+				$datos_busqueda['shareusuario'] ?? '', 
+				$campos_busqueda, 
+				$parametros_busqueda
+			);
+
+			$estado_filtro = !empty($datos_busqueda['estadousuario']) ? '%' . ucfirst($datos_busqueda['estadousuario']) . '%' : '%';
+
+			// 1. Consulta para contar total
+			$sql_count = "SELECT COUNT(*) as total 
+						  FROM App_usuarios_usuario u 
+						  WHERE $where_busqueda
+						  AND u.UsuarioEstado LIKE ?";
+
+			$parametos_consulta_count = array_merge($parametros_busqueda, [$estado_filtro]);
+
+			$stmt_count = $this->ejecutar_consulta_segura($sql_count, $parametos_consulta_count);
+			$total_registros = $stmt_count->fetch()['total'];
+
+			// 2. Consulta para obtener datos con JOINs a empresa y sucursal
+			$sql_datos = "SELECT 
+							u.UsuarioId,
+							u.UsuarioCodigo,
+							u.UsuarioDocumento,
+							u.UsuarioTipoDocumento,
+							u.UsuarioNombres,
+							u.UsuarioApellidos,
+							u.UsuarioEmail,
+							u.UsuarioTelefono,
+							u.UsuarioCargo,
+							u.UsuarioDepartamento,
+							u.UsuarioFechaRegistro,
+							u.UsuarioUltimoAcceso,
+							u.UsuarioEstado,
+							u.UsuarioEmpresaId,
+							u.UsuarioSucursalId,
+							u.UsuarioSedeId,
+							e.EmpresaNombre,
+							e.EmpresaCodigo,
+							s.SucursalNombre,
+							s.SucursalCodigo,
+							se.SedeNombre,
+							se.SedeCodigo
+						  FROM App_usuarios_usuario u 
+							LEFT JOIN App_empresa_empresa e ON u.UsuarioEmpresaId = e.EmpresaId 
+							LEFT JOIN App_empresa_sucursal s ON u.UsuarioSucursalId = s.SucursalId
+							LEFT JOIN App_empresa_sede se ON u.UsuarioSedeId = se.SedeId
+						  WHERE $where_busqueda
+						  AND u.UsuarioEstado LIKE ?
+						  ORDER BY u.UsuarioFechaRegistro DESC 
+						  LIMIT ? OFFSET ?";
+
+			$parametos_consulta_datos = array_merge($parametros_busqueda, [$estado_filtro, $registros_por_pagina, $offset]);
+
+			$stmt_datos = $this->ejecutar_consulta_segura($sql_datos, $parametos_consulta_datos);
+			$usuarios = $stmt_datos->fetchAll();
+
+			// Calcular paginación
+			$total_paginas = ceil($total_registros / $registros_por_pagina);
+
+			return [
+				'usuarios' => $usuarios,
+				'paginacion' => [
+					'pagina_actual' => $pagina,
+					'total_paginas' => $total_paginas,
+					'total_registros' => $total_registros,
+					'registros_por_pagina' => $registros_por_pagina,
+					'desde' => $offset + 1,
+					'hasta' => min($offset + $registros_por_pagina, $total_registros)
+				]
+			];
+
+		} catch(Exception $e) {
+			error_log("Error en listar_usuarios_modelo: " . $e->getMessage());
+			return [
+				'usuarios' => [],
+				'paginacion' => [
+					'pagina_actual' => 1,
+					'total_paginas' => 0,
+					'total_registros' => 0,
+					'registros_por_pagina' => $registros_por_pagina,
+					'desde' => 0,
+					'hasta' => 0
+				]
+			];
+		}
+	}*/
+    
 	
 	protected function listar_usuarios_modelo($datos_busqueda, $pagina = 1, $registros_por_pagina = 10, $filtro_empresa = null) {
     
@@ -752,6 +858,351 @@ class usuariosModel extends SecureModel {
 
 		} catch(Exception $e) {
 			error_log("Error cambiando estado de usuairo: " . $e->getMessage());
+			return false;
+		}
+	}
+	
+	
+	//===========================================================================================================
+	// FUNCIONES PARA GESTIÓN DE ROLES
+	//===========================================================================================================
+
+	//===========================================================================================================
+	// CREAR NUEVO ROL EN LA BASE DE DATOS
+	// Función para insertar un nuevo rol usando consultas seguras
+	//===========================================================================================================
+	protected function crear_rol_modelo($datos_rol){
+		try {
+			// Preparar la consulta SQL segura
+			$sql = "INSERT INTO App_usuarios_rol 
+					(RolCodigo, RolNombre, RolDescripcion, RolNivel, RolFechaCreacion, RolEstado) 
+					VALUES (?, ?, ?, ?, ?, ?)";
+
+			// Preparar los parámetros en el orden correcto
+			$parametros = [
+				$datos_rol['RolCodigo'],
+				$datos_rol['RolNombre'],
+				$datos_rol['RolDescripcion'],
+				$datos_rol['RolNivel'],
+				$datos_rol['RolFechaCreacion'],
+				$datos_rol['RolEstado']
+			];
+
+			/*-*-*-*-*-* Ejecutar consulta segura *-*-*-*-*-*/
+			$stmt = $this->ejecutar_consulta_segura($sql, $parametros);
+
+			/*-*-*-*-*-* Verificar si se insertó correctamente *-*-*-*-*-*/
+			return $stmt->rowCount() > 0;
+
+		} catch(Exception $e) {
+			/*-*-*-*-*-* Guardar error en log *-*-*-*-*-*/
+			error_log("Error creando rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// VERIFICAR NOMBRE DE ROL DUPLICADO
+	// Función para verificar si ya existe un rol con el mismo nombre
+	//===========================================================================================================
+	protected function verificar_nombre_rol_duplicado($nombre_rol){
+		try {
+			$sql = "SELECT COUNT(*) as total FROM App_usuarios_rol WHERE RolNombre = ?";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$nombre_rol]);
+			$resultado = $stmt->fetch();
+
+			return $resultado['total'] > 0;
+
+		} catch(Exception $e) {
+			error_log("Error verificando nombre de rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// VERIFICAR NIVEL DE ROL DUPLICADO
+	// Función para verificar si ya existe un rol con el mismo nivel
+	//===========================================================================================================
+	protected function verificar_nivel_rol_duplicado($nivel_rol){
+		try {
+			$sql = "SELECT COUNT(*) as total FROM App_usuarios_rol WHERE RolNivel = ?";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$nivel_rol]);
+			$resultado = $stmt->fetch();
+
+			return $resultado['total'] > 0;
+
+		} catch(Exception $e) {
+			error_log("Error verificando nivel de rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// VERIFICAR SI CÓDIGO DE ROL EXISTE
+	// Función para verificar si ya existe un rol con el mismo código
+	//===========================================================================================================
+	protected function verificar_codigo_rol_existe($codigo_rol){
+		try {
+			$sql = "SELECT COUNT(*) as total FROM App_usuarios_rol WHERE RolCodigo = ?";
+			$stmt = $this->ejecutar_consulta_segura($sql, [$codigo_rol]);
+			$resultado = $stmt->fetch();
+
+			return $resultado['total'] > 0;
+
+		} catch(Exception $e) {
+			error_log("Error verificando código de rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// OBTENER TODOS LOS ROLES
+	// Función para obtener la lista de roles con paginación y filtros
+	//===========================================================================================================
+	protected function listar_roles_modelo($datos_busqueda = [], $pagina = 1, $registros_por_pagina = 10){
+		try {
+			// Offset para la paginación
+			$offset = ($pagina - 1) * $registros_por_pagina;
+
+			// Definir campos donde buscar
+			$campos_busqueda = [
+				'RolNombre',
+				'RolCodigo', 
+				'RolDescripcion'
+			];
+
+			// Generar búsqueda inteligente
+			$parametros_busqueda = [];
+			$where_busqueda = $this->generar_busqueda_inteligente(
+				$datos_busqueda['buscarRol'] ?? '', 
+				$campos_busqueda, 
+				$parametros_busqueda
+			);
+
+			$estado_filtro = !empty($datos_busqueda['filtroEstadoRol']) ? $datos_busqueda['filtroEstadoRol'] : '%';
+			if ($estado_filtro !== '%') {
+				$estado_filtro = '%' . $estado_filtro . '%';
+			}
+
+			$nivel_filtro = !empty($datos_busqueda['filtroNivelRol']) ? $datos_busqueda['filtroNivelRol'] : '';
+
+			// Construir filtro de nivel
+			$where_nivel = "";
+			$parametros_nivel = [];
+			if (!empty($nivel_filtro)) {
+				$where_nivel = " AND RolNivel = ?";
+				$parametros_nivel[] = $nivel_filtro;
+			}
+
+			// 1. Consulta para contar total
+			$sql_count = "SELECT COUNT(*) as total 
+						  FROM App_usuarios_rol 
+						  WHERE $where_busqueda
+						  AND RolEstado LIKE ?
+						  $where_nivel";
+
+			$parametros_consulta_count = array_merge($parametros_busqueda, [$estado_filtro], $parametros_nivel);
+
+			$stmt_count = $this->ejecutar_consulta_segura($sql_count, $parametros_consulta_count);
+			$total_registros = $stmt_count->fetch()['total'];
+
+			// 2. Consulta para obtener datos
+			$sql_datos = "SELECT RolId, RolCodigo, RolNombre, RolDescripcion, RolNivel, 
+								 RolFechaCreacion, RolEstado,
+								 (SELECT COUNT(*) FROM App_usuarios_usuario_rol 
+								  WHERE UsuarioRolIdRol = App_usuarios_rol.RolId 
+								  AND UsuarioRolEstado = 'Activo') as UsuariosAsignados,
+								 (SELECT COUNT(*) FROM App_usuarios_rol_permiso 
+								  WHERE RolPermisoIdRol = App_usuarios_rol.RolId 
+								  AND RolPermisoEstado = 'Activo') as PermisosAsignados
+						  FROM App_usuarios_rol 
+						  WHERE $where_busqueda
+						  AND RolEstado LIKE ?
+						  $where_nivel
+						  ORDER BY RolNivel ASC, RolFechaCreacion DESC 
+						  LIMIT ? OFFSET ?";
+
+			$parametros_consulta_datos = array_merge($parametros_busqueda, [$estado_filtro], $parametros_nivel, [$registros_por_pagina, $offset]);
+
+			$stmt_datos = $this->ejecutar_consulta_segura($sql_datos, $parametros_consulta_datos);
+			$roles = $stmt_datos->fetchAll();
+
+			// Calcular paginación
+			$total_paginas = ceil($total_registros / $registros_por_pagina);
+
+			return [
+				'roles' => $roles,
+				'paginacion' => [
+					'pagina_actual' => $pagina,
+					'total_paginas' => $total_paginas,
+					'total_registros' => $total_registros,
+					'registros_por_pagina' => $registros_por_pagina,
+					'desde' => $offset + 1,
+					'hasta' => min($offset + $registros_por_pagina, $total_registros)
+				]
+			];
+
+		} catch(Exception $e) {
+			error_log("Error en listar_roles_modelo: " . $e->getMessage());
+			return [
+				'roles' => [],
+				'paginacion' => [
+					'pagina_actual' => 1,
+					'total_paginas' => 0,
+					'total_registros' => 0,
+					'registros_por_pagina' => $registros_por_pagina,
+					'desde' => 0,
+					'hasta' => 0
+				]
+			];
+		}
+	}
+
+	//===========================================================================================================
+	// OBTENER ESTADÍSTICAS DE ROLES
+	// Función para obtener contadores para las tarjetas de estadísticas
+	//===========================================================================================================
+	protected function obtener_estadisticas_roles_modelo() {
+		try {
+			// Total de roles
+			$sql_total_roles = "SELECT COUNT(*) as total_roles FROM App_usuarios_rol";
+			$stmt = $this->ejecutar_consulta_segura($sql_total_roles, []);
+			$total_roles = $stmt->fetch();
+
+			// Roles activos
+			$sql_roles_activos = "SELECT COUNT(*) as roles_activos FROM App_usuarios_rol WHERE RolEstado = 'Activo'";
+			$stmt = $this->ejecutar_consulta_segura($sql_roles_activos, []);
+			$roles_activos = $stmt->fetch();
+
+			// Usuarios con roles asignados
+			$sql_usuarios_con_roles = "SELECT COUNT(DISTINCT UsuarioRolIdUsuario) as usuarios_con_roles 
+									   FROM App_usuarios_usuario_rol 
+									   WHERE UsuarioRolEstado = 'Activo'";
+			$stmt = $this->ejecutar_consulta_segura($sql_usuarios_con_roles, []);
+			$usuarios_con_roles = $stmt->fetch();
+
+			// Total de permisos asignados a roles
+			$sql_permisos_asignados = "SELECT COUNT(*) as permisos_asignados 
+									   FROM App_usuarios_rol_permiso 
+									   WHERE RolPermisoEstado = 'Activo'";
+			$stmt = $this->ejecutar_consulta_segura($sql_permisos_asignados, []);
+			$permisos_asignados = $stmt->fetch();
+
+			return [
+				'total_roles' => $total_roles['total_roles'],
+				'roles_activos' => $roles_activos['roles_activos'],
+				'usuarios_con_roles' => $usuarios_con_roles['usuarios_con_roles'],
+				'permisos_asignados' => $permisos_asignados['permisos_asignados']
+			];
+
+		} catch(Exception $e) {
+			error_log("Error en obtener_estadisticas_roles_modelo: " . $e->getMessage());
+			return [
+				'total_roles' => 0,
+				'roles_activos' => 0,
+				'usuarios_con_roles' => 0,
+				'permisos_asignados' => 0
+			];
+		}
+	}
+
+	//===========================================================================================================
+	// OBTENER ROL POR ID
+	// Función para obtener un rol específico por su ID
+	//===========================================================================================================
+	protected function obtener_rol_por_id($rol_id){
+		try {
+			$sql = "SELECT RolId, RolCodigo, RolNombre, RolDescripcion, RolNivel, 
+						   RolFechaCreacion, RolEstado,
+						   (SELECT COUNT(*) FROM App_usuarios_usuario_rol 
+							WHERE UsuarioRolIdRol = App_usuarios_rol.RolId 
+							AND UsuarioRolEstado = 'Activo') as UsuariosAsignados
+					FROM App_usuarios_rol 
+					WHERE RolId = ?";
+
+			$stmt = $this->ejecutar_consulta_segura($sql, [$rol_id]);
+			return $stmt->fetch();
+
+		} catch(Exception $e) {
+			error_log("Error obteniendo rol por ID: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// ACTUALIZAR ROL
+	// Función para actualizar los datos de un rol existente
+	//===========================================================================================================
+	protected function actualizar_rol_modelo($datos_rol){
+		try {
+			$sql = "UPDATE App_usuarios_rol 
+					SET RolNombre = ?, 
+						RolDescripcion = ?, 
+						RolNivel = ?
+					WHERE RolId = ?";
+
+			$parametros = [
+				$datos_rol['RolNombre'],
+				$datos_rol['RolDescripcion'],
+				$datos_rol['RolNivel'],
+				$datos_rol['RolId']
+			];
+
+			$stmt = $this->ejecutar_consulta_segura($sql, $parametros);
+
+			// Verificar que se actualizó al menos una fila
+			return $stmt->rowCount() > 0;
+
+		} catch(Exception $e) {
+			error_log("Error actualizando rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// ELIMINAR ROL (SOFT DELETE)
+	// Función para cambiar el estado del rol a 'Inactivo'
+	//===========================================================================================================
+	protected function eliminar_rol_modelo($rol_id) {
+		try {
+			$sql = "UPDATE App_usuarios_rol 
+					SET RolEstado = 'Inactivo'
+					WHERE RolId = ? 
+					AND RolEstado = 'Activo'";
+
+			$stmt = $this->ejecutar_consulta_segura($sql, [$rol_id]);
+
+			// Verificar que se actualizó al menos una fila
+			return $stmt->rowCount() > 0;
+
+		} catch(Exception $e) {
+			error_log("Error eliminando rol: " . $e->getMessage());
+			return false;
+		}
+	}
+
+	//===========================================================================================================
+	// CAMBIAR ESTADO DE ROL
+	// Función para cambiar el estado de un rol (Activo/Inactivo)
+	//===========================================================================================================
+	protected function cambiar_estado_rol_modelo($rol_id, $nuevo_estado){
+		try {
+			$sql = "UPDATE App_usuarios_rol
+					SET RolEstado = ?
+					WHERE RolId = ?";
+
+			$parametros = [
+				$nuevo_estado,
+				$rol_id
+			];
+
+			$stmt = $this->ejecutar_consulta_segura($sql, $parametros);
+
+			// Verificar que se actualizó al menos una fila
+			return $stmt->rowCount() > 0;
+
+		} catch(Exception $e) {
+			error_log("Error cambiando estado de rol: " . $e->getMessage());
 			return false;
 		}
 	}

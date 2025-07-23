@@ -1529,3 +1529,442 @@ document.addEventListener('DOMContentLoaded', function() {
 		});
 	}
 });
+
+
+
+//===========================================================================================================
+// FUNCIONES PARA GESTIÓN DE ROLES - AGREGAR AL FINAL DE app_usuario.js
+//===========================================================================================================
+
+//===========================================================================================================
+// MOSTRAR SECCIÓN DE GESTIÓN DE ROLES
+// Función para mostrar la interfaz de gestión de roles
+//===========================================================================================================
+function mostrarGestionRoles() {
+    // Ocultar sección de usuarios
+    const seccionUsuarios = document.querySelector('.main-content');
+    
+    // Crear contenido de gestión de roles
+    const contenidoRoles = `
+        <div class="gestion-roles-container">
+            <!-- Breadcrumb -->
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Inicio</a></li>
+                    <li class="breadcrumb-item"><a href="#" onclick="location.reload()">Usuarios</a></li>
+                    <li class="breadcrumb-item active">Gestión de Roles</li>
+                </ol>
+            </nav>
+
+            <!-- Header -->
+            <div class="page-header">
+                <div>
+                    <h2 class="page-title">
+                        <i class="bi bi-shield-check me-2"></i>
+                        Gestión de Roles
+                    </h2>
+                    <p class="text-muted mb-0">Administra los roles del sistema</p>
+                </div>
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoRol" onclick="cargarNivelesDisponibles()">
+                    <i class="bi bi-shield-plus me-1"></i>
+                    Nuevo Rol
+                </button>
+            </div>
+
+            <!-- Tarjetas de Estadísticas -->
+            <div class="row stats-row">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card blue">
+                        <div class="stats-content">
+                            <div class="stats-number" id="totalRoles">#</div>
+                            <div class="stats-label">Total Roles</div>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card green">
+                        <div class="stats-content">
+                            <div class="stats-number" id="rolesActivos">#</div>
+                            <div class="stats-label">Roles Activos</div>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-shield-fill-check"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card orange">
+                        <div class="stats-content">
+                            <div class="stats-number" id="usuariosConRoles">#</div>
+                            <div class="stats-label">Usuarios con Roles</div>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-people-fill"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="stats-card purple">
+                        <div class="stats-content">
+                            <div class="stats-number" id="permisosAsignados">#</div>
+                            <div class="stats-label">Permisos Asignados</div>
+                        </div>
+                        <div class="stats-icon">
+                            <i class="bi bi-key-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Lista de Roles -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h5 class="table-title">
+                        <i class="bi bi-list"></i>
+                        Roles del Sistema
+                        <span class="badge bg-light text-dark ms-2" id="contadorRoles">#</span>
+                    </h5>
+                </div>
+
+                <!-- Filtros -->
+                <div class="table-filters">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="input-group">
+                                <span class="input-group-text">
+                                    <i class="bi bi-search"></i>
+                                </span>
+                                <input type="text" class="form-control" id="buscarRol" name="buscarRol" placeholder="Buscar roles...">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filtroEstadoRol" name="filtroEstadoRol">
+                                <option value="">Todos los estados</option>
+                                <option value="Activo">Solo Activos</option>
+                                <option value="Inactivo">Solo Inactivos</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select class="form-select" id="filtroNivelRol" name="filtroNivelRol">
+                                <option value="">Todos los niveles</option>
+                                <!-- Se cargan dinámicamente -->
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-outline-primary" onclick="filtrarRoles()">
+                                <i class="bi bi-funnel me-1"></i>
+                                Filtrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabla de Roles -->
+                <div class="table-responsive" id="tablaRoles">
+                    <!-- Aquí se cargan los roles via AJAX -->
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Reemplazar contenido
+    seccionUsuarios.innerHTML = contenidoRoles;
+    
+    // Cargar roles
+    cargarRoles();
+}
+
+//===========================================================================================================
+// CARGAR NIVELES DISPONIBLES PARA CREAR ROL
+// Función para cargar los niveles que el usuario actual puede asignar
+//===========================================================================================================
+function cargarNivelesDisponibles() {
+    const selectNivel = document.getElementById('rolNivel');
+    if (!selectNivel) return;
+    
+    // Limpiar opciones existentes
+    selectNivel.innerHTML = '<option value="">Seleccionar Nivel</option>';
+    
+    // Obtener niveles disponibles via AJAX
+    const formData = new FormData();
+    formData.append('accion', 'obtener_niveles_disponibles');
+    formData.append('csrf_token_niveles', document.querySelector('input[name="csrf_token_nuevo_rol"]').value);
+    
+    fetch('../ajax/App_usuariosAjax.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            data.niveles.forEach(nivel => {
+                const option = document.createElement('option');
+                option.value = nivel.valor;
+                option.textContent = `Nivel ${nivel.valor} - ${nivel.descripcion}`;
+                selectNivel.appendChild(option);
+            });
+        } else {
+            Swal.fire({
+                title: 'Error',
+                text: 'No se pudieron cargar los niveles disponibles',
+                icon: 'error'
+            });
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        Swal.fire({
+            title: 'Error',
+            text: 'Error de conexión al cargar niveles',
+            icon: 'error'
+        });
+    });
+}
+
+//===========================================================================================================
+// VALIDACIONES DEL FORMULARIO DE ROL
+// Función para configurar validaciones en tiempo real
+//===========================================================================================================
+function configurarValidacionesRol() {
+    const form = document.getElementById('formNuevoRol');
+    if (!form) return;
+    
+    // Contador de caracteres para descripción
+    const descripcion = document.getElementById('rolDescripcion');
+    const contador = document.getElementById('contadorCaracteres');
+    
+    if (descripcion && contador) {
+        descripcion.addEventListener('input', function() {
+            contador.textContent = this.value.length;
+            if (this.value.length > 500) {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+    }
+    
+    // Validación de campos requeridos
+    const camposRequeridos = form.querySelectorAll('input[required], select[required]');
+    camposRequeridos.forEach(campo => {
+        campo.addEventListener('blur', function() {
+            validarCampoRol(this);
+        });
+        
+        campo.addEventListener('input', function() {
+            if (this.classList.contains('is-invalid')) {
+                validarCampoRol(this);
+            }
+        });
+    });
+}
+
+//===========================================================================================================
+// VALIDAR CAMPO INDIVIDUAL
+// Función para validar un campo específico del formulario de rol
+//===========================================================================================================
+function validarCampoRol(campo) {
+    const valor = campo.value.trim();
+    let esValido = true;
+    let mensaje = '';
+    
+    // Validar campo requerido
+    if (campo.hasAttribute('required') && valor === '') {
+        esValido = false;
+        mensaje = 'Este campo es obligatorio';
+    }
+    
+    // Validaciones específicas por campo
+    switch(campo.id) {
+        case 'rolNombre':
+            if (valor.length < 3) {
+                esValido = false;
+                mensaje = 'El nombre debe tener al menos 3 caracteres';
+            }
+            break;
+            
+        case 'rolNivel':
+            if (valor === '' || !Number.isInteger(parseInt(valor))) {
+                esValido = false;
+                mensaje = 'Selecciona un nivel válido';
+            }
+            break;
+            
+        case 'rolDescripcion':
+            if (valor.length > 500) {
+                esValido = false;
+                mensaje = 'La descripción no puede exceder 500 caracteres';
+            }
+            break;
+    }
+    
+    // Aplicar estilos de validación
+    if (esValido) {
+        campo.classList.remove('is-invalid');
+        campo.classList.add('is-valid');
+        const feedback = campo.parentElement.nextElementSibling;
+        if (feedback && feedback.classList.contains('invalid-feedback')) {
+            feedback.textContent = '';
+        }
+    } else {
+        campo.classList.remove('is-valid');
+        campo.classList.add('is-invalid');
+        const feedback = campo.parentElement.nextElementSibling;
+        if (feedback && feedback.classList.contains('invalid-feedback')) {
+            feedback.textContent = mensaje;
+        }
+    }
+    
+    return esValido;
+}
+
+//===========================================================================================================
+// VALIDAR FORMULARIO COMPLETO
+// Función para validar todo el formulario antes de enviar
+//===========================================================================================================
+function validarFormularioRol() {
+    const form = document.getElementById('formNuevoRol');
+    const camposRequeridos = form.querySelectorAll('input[required], select[required]');
+    let formularioValido = true;
+    
+    camposRequeridos.forEach(campo => {
+        if (!validarCampoRol(campo)) {
+            formularioValido = false;
+        }
+    });
+    
+    return formularioValido;
+}
+
+//===========================================================================================================
+// GUARDAR NUEVO ROL
+// Función principal para crear un nuevo rol
+//===========================================================================================================
+function guardarNuevoRol() {
+    // Validar formulario
+    if (!validarFormularioRol()) {
+        Swal.fire({
+            title: 'Formulario incompleto',
+            text: 'Por favor complete todos los campos correctamente',
+            icon: 'warning',
+            confirmButtonText: 'Entendido',
+            confirmButtonColor: '#f39c12'
+        });
+        return;
+    }
+    
+    const formData = new FormData(document.getElementById('formNuevoRol'));
+    formData.append('accion', 'crear_rol');
+    
+    // Mostrar loading
+    Swal.fire({
+        title: 'Creando rol...',
+        text: 'Por favor espere mientras procesamos la información',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        showConfirmButton: false,
+        didOpen: () => {
+            Swal.showLoading();
+        }
+    });
+    
+    // Enviar datos por AJAX
+    fetch('../ajax/App_usuariosAjax.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        Swal.close();
+        
+        if (data.Tipo === 'success') {
+            Swal.fire({
+                title: data.Titulo,
+                text: data.Texto,
+                icon: 'success',
+                confirmButtonText: 'Excelente',
+                confirmButtonColor: '#28a745'
+            }).then(() => {
+                // Cerrar modal y limpiar formulario
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalNuevoRol'));
+                modal.hide();
+                limpiarFormularioRol();
+                
+                // Recargar lista de roles
+                cargarRoles();
+            });
+        } else {
+            Swal.fire({
+                title: data.Titulo || 'Error',
+                text: data.Texto || 'No se pudo crear el rol',
+                icon: data.Tipo || 'error',
+                confirmButtonText: 'Entendido'
+            });
+        }
+    })
+    .catch(error => {
+        Swal.close();
+        console.error('Error:', error);
+        Swal.fire({
+            title: 'Error de conexión',
+            text: 'No se pudo conectar con el servidor. Verifique su conexión a internet.',
+            icon: 'error',
+            confirmButtonText: 'Reintentar'
+        });
+    });
+}
+
+//===========================================================================================================
+// LIMPIAR FORMULARIO DE ROL
+// Función para resetear el formulario de creación de roles
+//===========================================================================================================
+function limpiarFormularioRol() {
+    const form = document.getElementById('formNuevoRol');
+    if (form) {
+        form.reset();
+        
+        // Limpiar validaciones
+        const campos = form.querySelectorAll('.form-control, .form-select');
+        campos.forEach(campo => {
+            campo.classList.remove('is-valid', 'is-invalid');
+        });
+        
+        // Limpiar mensajes de error
+        const feedbacks = form.querySelectorAll('.invalid-feedback');
+        feedbacks.forEach(feedback => feedback.textContent = '');
+        
+        // Resetear contador
+        const contador = document.getElementById('contadorCaracteres');
+        if (contador) contador.textContent = '0';
+    }
+}
+
+//===========================================================================================================
+// CARGAR ROLES
+// Función para cargar y mostrar la lista de roles
+//===========================================================================================================
+function cargarRoles() {
+    // Implementaremos esta función en el siguiente paso
+    console.log('Cargando roles...');
+}
+
+//===========================================================================================================
+// EVENT LISTENERS PARA GESTIÓN DE ROLES
+// Configurar eventos cuando se carga la página
+//===========================================================================================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Configurar validaciones del modal de roles cuando se abre
+    const modalNuevoRol = document.getElementById('modalNuevoRol');
+    if (modalNuevoRol) {
+        modalNuevoRol.addEventListener('shown.bs.modal', function() {
+            configurarValidacionesRol();
+        });
+        
+        modalNuevoRol.addEventListener('hidden.bs.modal', function() {
+            limpiarFormularioRol();
+        });
+    }
+});
