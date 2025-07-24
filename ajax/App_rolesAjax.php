@@ -23,6 +23,18 @@ if (isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true){
 			echo $rolesController->registrar_rol_controlador();
 		}
 		
+		// LISTAR ROLES - COPIADO EXACTO DE USUARIOS
+		if(isset($_POST['csrf_token_list_roles'])){
+			header('Content-Type: application/json; charset=UTF-8');
+			echo $rolesController->listar_roles_controlador();
+		}
+		
+		// ELIMINACIÓN DE ROL - COPIADO EXACTO DE USUARIOS
+		if(isset($_POST['accion']) && $_POST['accion'] == 'eliminar_rol'){
+			header('Content-Type: application/json; charset=UTF-8');
+			echo $rolesController->eliminar_rol_controlador();
+		}
+		
 		//regenero token para la función que se esté trabajando
 		if(isset($_POST['accion']) && $_POST['accion'] == 'csrf_regenerar'){ 
 			$key = $_POST['key'] ?? '';
