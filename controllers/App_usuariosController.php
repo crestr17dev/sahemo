@@ -1,6 +1,6 @@
 <?php
  	//===========================================================================================================
-    // CONTROLADOR DE USUARIOS - ACTUALIZADO CON CONTRASEÑAS TEMPORALES
+    // CONTROLADOR DE USUARIOS - 
     // Este archivo maneja toda la lógica del módulo de usuarios
 	// Es el intermediario entre las vistas y el modelo
     //===========================================================================================================

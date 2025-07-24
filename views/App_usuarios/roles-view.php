@@ -1004,7 +1004,7 @@ $rolesController = new rolesController();
                 
                 <div class="modal-body">
                     <form id="formNuevoRol" novalidate>
-						<input type="hidden" name="csrf_token" value="<?php echo $rolesController->obtener_token_csrf('modalNuevoRol'); ?>">
+						<input type="hidden" name="csrf_token" value="<?php echo $rolesController->obtener_token_csrf('nuevoRol'); ?>">
                         
                         <!-- Información Básica del Rol -->
                         <div class="form-section">
@@ -1014,52 +1014,7 @@ $rolesController = new rolesController();
                             </div>
                             
                             <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="rolCodigo" class="form-label required">Código del Rol</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">
-                                                <i class="bi bi-hash"></i>
-                                            </span>
-                                            <input type="text" class="form-control" id="rolCodigo" name="rol-codigo" 
-                                                   placeholder="Ej: GERENTE_VENTAS" maxlength="50" required 
-                                                   style="text-transform: uppercase;">
-                                        </div>
-                                        <div class="form-text">
-                                            <i class="bi bi-info-circle me-1"></i>
-                                            Solo letras, números y guiones bajos. Se convierte automáticamente a mayúsculas.
-                                        </div>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                                
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="rolNivel" class="form-label required">Nivel del Rol</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">
-                                                <i class="bi bi-sort-numeric-down"></i>
-                                            </span>
-                                            <select class="form-select" id="rolNivel" name="rol-nivel" required>
-                                                <option value="">Seleccionar Nivel</option>
-                                                <option value="1">Nivel 1 - Super Admin</option>
-                                                <option value="2">Nivel 2 - Admin</option>
-                                                <option value="3">Nivel 3 - Manager/Supervisor</option>
-                                                <option value="4">Nivel 4 - Usuario Estándar</option>
-                                                <option value="5">Nivel 5 - Solo Lectura</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-text">
-                                            <i class="bi bi-info-circle me-1"></i>
-                                            El nivel 0 está reservado para System Admin.
-                                        </div>
-                                        <div class="invalid-feedback"></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-12">
+                               <div class="col-md-6">
                                     <div class="mb-3">
                                         <label for="rolNombre" class="form-label required">Nombre del Rol</label>
                                         <div class="input-group">
@@ -1072,6 +1027,9 @@ $rolesController = new rolesController();
                                         <div class="invalid-feedback"></div>
                                     </div>
                                 </div>
+
+                            <div class="row">
+                                
                             </div>
 
                             <div class="row">

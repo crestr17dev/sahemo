@@ -7,8 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start(['name' => SESION]);
 }
 
-if ((isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true)){
-	if(isset($_POST['accion'])){
+if (isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true){
+	if(isset($_POST['rol-nombre']) || isset($_POST['accion'])){
 		
 		require_once "../controllers/App_rolesController.php";
 		$rolesController = new rolesController();
@@ -16,8 +16,12 @@ if ((isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true)){
 		//========================================================================================
 		//FUNCIONES PARA ADMINISTRACIÓN DE ROLES
 		//========================================================================================
-
 		
+		// REGISTRO DE NUEVO ROL
+		if(isset($_POST['rol-nombre'])){
+			header('Content-Type: application/json; charset=UTF-8');
+			echo $rolesController->registrar_rol_controlador();
+		}
 		
 		//regenero token para la función que se esté trabajando
 		if(isset($_POST['accion']) && $_POST['accion'] == 'csrf_regenerar'){ 
@@ -25,7 +29,7 @@ if ((isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true)){
 
 			// Validar key permitidas (lista blanca)
 			$keys_permitidas = [
-				'modalNuevoRol'
+				'nuevoRol'
 			];
 
 			if (!in_array($key, $keys_permitidas)) {
@@ -55,4 +59,5 @@ if ((isset($_SESSION['sesionactiva']) && $_SESSION['sesionactiva'] == true)){
     }
 	echo '<script>window.location.href="'.SERVERURL.'" </script>';
 }
+
 ?>
